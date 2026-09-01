@@ -21,7 +21,9 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
+# pyrefly: ignore [missing-import]
 import cv2
+# pyrefly: ignore [missing-import]
 import numpy as np
 
 # Ensure the src/ package is on the path when run directly
@@ -99,11 +101,14 @@ def draw_servo_angles(frame: np.ndarray, pan: float, tilt: float, mode: str) -> 
 
 
 def main() -> None:
+    # Resolve project root so relative defaults work from any CWD
+    _PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
     parser = argparse.ArgumentParser(description="IntelliTrack live demo")
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/default.yaml",
+        default=str(_PROJECT_ROOT / "configs" / "default.yaml"),
         help="Path to the YAML config file.",
     )
     parser.add_argument(
