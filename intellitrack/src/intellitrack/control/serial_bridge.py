@@ -1,0 +1,1 @@
+"""Serial bridge placeholder module."""
