@@ -1,0 +1,60 @@
+camera:
+  index: 0
+  width: 640
+  height: 480
+  fps_target: 30
+
+detection:
+  model_path: "yolo11n.pt"
+  confidence_threshold: 0.4
+  iou_threshold: 0.45
+  target_classes: ["person"]
+
+tracking:
+  tracker: "bytetrack"
+  max_age_frames: 30
+  selection_strategy: "closest_to_center"  # or largest_bbox | highest_confidence | manual_id_lock
+
+prediction:
+  mode: "reactive_pid"  # reactive_pid | kalman | lstm | transformer
+  sequence_length: 15
+  horizon_frames: 5
+  lstm:
+    hidden_size: 64
+    num_layers: 2
+    checkpoint_path: "data/models/lstm_predictor.pt"
+  transformer:
+    d_model: 64
+    nhead: 4
+    num_layers: 2
+    checkpoint_path: "data/models/transformer_predictor.pt"
+
+control:
+  pid:
+    kp: 0.05
+    ki: 0.0
+    kd: 0.01
+    output_limit: 15  # max degrees change per update
+  deadband_px: 10
+
+servo:
+  pan_min_deg: 0
+  pan_max_deg: 180
+  tilt_min_deg: 0
+  tilt_max_deg: 180
+  pan_center_deg: 90
+  tilt_center_deg: 90
+
+hardware:
+  enabled: false
+  serial_port: "/dev/ttyUSB0"
+  baud_rate: 115200
+  mock_if_unavailable: true
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+
+logging:
+  level: "INFO"
+  log_dir: "data/logs"
