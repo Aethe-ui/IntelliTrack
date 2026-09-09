@@ -1,14 +1,16 @@
 camera:
-  index: 0
+  index: 1
   width: 640
   height: 480
   fps_target: 30
+  source: "live"       # live | file
+  file_path: null      # path used when source == file
 
 detection:
   model_path: "yolo11n.pt"
   confidence_threshold: 0.4
   iou_threshold: 0.45
-  target_classes: ["person"]
+  target_classes: ["cell phone"]
 
 tracking:
   tracker: "bytetrack"

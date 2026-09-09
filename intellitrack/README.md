@@ -2,7 +2,7 @@
 
 **AI-driven pan-tilt vision platform for predictive object tracking.**
 
-IntelliTrack is a research-grade vision system that detects, tracks, and *predicts* the future position of a moving object in real time, then drives a two-axis servo mount (via Arduino/ESP32) to keep the object centered in frame. The core research contribution is a **predictive tracking** approach (LSTM/Transformer trajectory prediction) compared against purely reactive baselines (PID-only and Kalman filter), providing a measurable answer to: *Does predictive trajectory estimation improve tracking accuracy and reduce effective latency compared to reactive control on low-cost embedded hardware?*
+IntelliTrack detects, tracks, and *predicts* the future position of a moving object in real time, then drives a two-axis servo mount (via Arduino/ESP32) to keep the object centered in frame. The MVP compares four modes — reactive PID, Kalman, LSTM, and Transformer — to measure whether predictive trajectory estimation improves tracking accuracy and effective latency on low-cost hardware.
 
 ---
 
@@ -10,7 +10,7 @@ IntelliTrack is a research-grade vision system that detects, tracks, and *predic
 
 ```
 Camera → YOLO Detection → Multi-Object Tracker → Target Selection
-       → Trajectory Prediction → Kalman Filter → PID Controller
+       → Trajectory Prediction → PID Controller
        → Arduino/ESP32 → Pan-Tilt Servos
 ```
 
@@ -27,88 +27,92 @@ Camera → YOLO Detection → Multi-Object Tracker → Target Selection
 
 ## Setup
 
-### 1. Clone and enter the project
-
 ```bash
-git clone <repo-url>
 cd intellitrack
-```
-
-### 2. Create a virtual environment and install dependencies
-
-```bash
 python3.10 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
-```
-
-### 3. Copy and configure the environment file
-
-```bash
 cp .env.example .env
-# Edit .env as needed (CAMERA_INDEX, SERIAL_PORT, etc.)
 ```
 
 ---
 
-## Running Live Tracking
+## Live Tracking
 
 ```bash
 python scripts/run_live.py --config configs/default.yaml --mode reactive_pid
 ```
 
-Switch modes via the `--mode` flag or by editing `prediction.mode` in `configs/default.yaml`.
+Press `q` to quit. Modes: `reactive_pid`, `kalman`, `lstm`, `transformer`.
+
+With no Arduino attached the pipeline logs servo commands in **mock mode** and continues normally. Set `hardware.enabled: true` in config to send real serial commands.
 
 ---
 
-## Recording a Dataset
+## Web Dashboard
 
 ```bash
-python scripts/record_dataset.py --config configs/default.yaml --duration 120
+uvicorn intellitrack.api.main:app --host 0.0.0.0 --port 8000
 ```
 
-Saves trajectory CSV to `data/datasets/`.
-
----
-
-## Training a Predictor
-
-```bash
-python scripts/train_predictor.py --model lstm --dataset data/datasets/<file>.csv --config configs/default.yaml
-python scripts/train_predictor.py --model transformer --dataset data/datasets/<file>.csv --config configs/default.yaml
-```
-
----
-
-## Running the Experiment Suite
-
-```bash
-python scripts/run_experiment.py --mode kalman --duration-seconds 60
-python scripts/run_experiment.py --mode lstm --duration-seconds 60
-```
-
----
-
-## Generating the Comparison Report
-
-```bash
-python scripts/generate_report.py
-```
-
-Output: `data/logs/comparison_report.md` with a four-way comparison table and plots.
+Open http://localhost:8000 for the live MJPEG stream, metrics panel, and runtime mode/PID controls.
 
 ---
 
 ## Arduino Firmware
 
-Flash `firmware/pan_tilt_controller/pan_tilt_controller.ino` to your Arduino/ESP32.  
-Connect pan servo to **pin 9**, tilt servo to **pin 10**.  
-Set `hardware.enabled: true` and `hardware.serial_port` in `configs/default.yaml`.
+1. Flash `firmware/pan_tilt_controller/pan_tilt_controller.ino` with the Arduino IDE (or `arduino-cli`).
+2. Pan servo → **pin 9**, tilt servo → **pin 10**.
+3. Serial protocol: `PAN:<int> TILT:<int>\n` → firmware replies `ACK\n`.
+4. Set in `configs/default.yaml`:
+
+```yaml
+hardware:
+  enabled: true
+  serial_port: "/dev/ttyUSB0"   # or COMx on Windows
+  baud_rate: 115200
+  mock_if_unavailable: true
+```
 
 ---
 
-## Running Tests
+## Record a Dataset & Train Predictors
+
+```bash
+python scripts/record_dataset.py --config configs/default.yaml --duration 120
+python scripts/train_predictor.py --model lstm --dataset data/datasets/trajectories_<ts>.csv
+python scripts/train_predictor.py --model transformer --dataset data/datasets/trajectories_<ts>.csv
+```
+
+Checkpoints are written to `data/models/`. If a checkpoint is missing, LSTM/Transformer modes fall back to constant-velocity extrapolation so the pipeline never crashes.
+
+---
+
+## Experiments & Comparison Report
+
+Record a reference video (or use a live camera), then run each mode:
+
+```bash
+# Against a recorded video (fair four-way comparison)
+python scripts/run_experiment.py --mode reactive_pid --source recorded --video-path data/recordings/demo.mp4
+python scripts/run_experiment.py --mode kalman --source recorded --video-path data/recordings/demo.mp4
+python scripts/run_experiment.py --mode lstm --source recorded --video-path data/recordings/demo.mp4
+python scripts/run_experiment.py --mode transformer --source recorded --video-path data/recordings/demo.mp4
+
+# Or live for N seconds
+python scripts/run_experiment.py --mode kalman --duration-seconds 60
+
+python scripts/generate_report.py --log-dir data/logs
+```
+
+Report output: `data/logs/comparison_report.md` (table + three plots under `data/logs/plots/`).
+
+Set `camera.source: file` and `camera.file_path` in config as an alternative to CLI `--video-path`.
+
+---
+
+## Tests
 
 ```bash
 pytest
@@ -118,15 +122,13 @@ pytest
 
 ## Configuration
 
-All runtime behaviour is controlled via `configs/default.yaml`.  
-CLI scripts accept `--config path/to.yaml` and `--mode <mode>` overrides.  
-See `configs/default.yaml` for all available keys and their default values.
+All runtime behaviour is controlled via `configs/default.yaml`. CLI scripts accept `--config` and `--mode` overrides.
 
 ---
 
 ## Known Limitations / Future Work
 
-- Edge deployment (ONNX/TensorRT, Jetson Nano/Raspberry Pi) — not in MVP scope.
+- Edge deployment (ONNX/TensorRT, Jetson/Pi) — out of MVP scope.
 - Person re-identification and multi-target simultaneous servoing — future work.
-- Sensor fusion (IMU, range sensors), auto-zoom — future work.
-- Authentication/user accounts on the dashboard — future work.
+- Sensor fusion, auto-zoom — future work.
+- Dashboard authentication — future work.

@@ -1,16 +1,32 @@
-ultralytics>=8.0.0
+# IntelliTrack MVP dependencies (Python >= 3.10)
+# Install: pip install -r requirements.txt && pip install -e .
+
+# --- Vision / detection ---
+ultralytics>=8.3.0
 opencv-python>=4.8.0
+Pillow>=10.0.0
+
+# --- Deep learning (LSTM / Transformer predictors) ---
 torch>=2.0.0
 torchvision>=0.15.0
-fastapi>=0.100.0
-uvicorn[standard]>=0.22.0
-pydantic>=2.0.0
-pyserial>=3.5
+
+# --- Numerics / data / plots ---
 numpy>=1.24.0
 pandas>=2.0.0
 matplotlib>=3.7.0
 PyYAML>=6.0
-pytest>=7.4.0
+
+# --- Control / hardware ---
+pyserial>=3.5
+psutil>=5.9.0
+
+# --- FastAPI dashboard ---
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
+pydantic>=2.0.0
 python-multipart>=0.0.6
 websockets>=11.0
-psutil>=5.9.0
+httpx>=0.27.0
+
+# --- Testing ---
+pytest>=7.4.0
