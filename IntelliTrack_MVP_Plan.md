@@ -9,6 +9,7 @@ This document is a complete, phase-by-phase build spec for the IntelliTrack MVP.
 **What it is:** An AI-driven pan-tilt vision platform that detects, tracks, and predicts the future position of a moving object in real time, then drives a two-axis servo mount (via Arduino/ESP32) to keep the object centered in frame.
 
 **Core research differentiator:** Predictive tracking (LSTM/Transformer trajectory prediction) instead of purely reactive tracking (PID only). The MVP must produce a working, measurable comparison between four tracking modes:
+
 1. YOLO + PID (reactive baseline)
 2. YOLO + Kalman Filter
 3. YOLO + LSTM trajectory prediction
@@ -26,6 +27,7 @@ This document is a complete, phase-by-phase build spec for the IntelliTrack MVP.
 ## 1. MVP Scope — In and Out
 
 **In scope for MVP:**
+
 - Single-camera, single-target tracking (multi-object detection/tracking, but only one active target at a time).
 - All four tracking modes listed above, switchable via config.
 - Real-time video pipeline running on a normal laptop CPU/GPU (no Jetson/Pi required to complete MVP).
@@ -35,6 +37,7 @@ This document is a complete, phase-by-phase build spec for the IntelliTrack MVP.
 - Unit tests for every non-trivial module.
 
 **Explicitly out of scope for MVP (future work, do not build now):**
+
 - Person re-identification, activity recognition, reinforcement-learning adaptive control.
 - Multi-target simultaneous tracking/servoing.
 - Edge deployment / model quantization (ONNX/TensorRT export).
@@ -149,6 +152,7 @@ intellitrack/
 **Goal:** A clean, installable, empty-but-structured repo.
 
 **Tasks:**
+
 1. Create the full directory/file tree from Section 2, with empty `__init__.py` files and placeholder files containing only a module docstring (e.g. `"""Camera capture module."""`).
 2. Write `requirements.txt` pinning at least: `ultralytics`, `opencv-python`, `torch`, `torchvision`, `fastapi`, `uvicorn[standard]`, `pydantic`, `pyserial`, `numpy`, `pandas`, `matplotlib`, `PyYAML`, `pytest`, `python-multipart`, `websockets`.
 3. Write `.env.example` with: `CAMERA_INDEX=0`, `SERIAL_PORT=/dev/ttyUSB0`, `SERIAL_BAUD=115200`.
@@ -167,9 +171,9 @@ intellitrack/
    tracking:
      tracker: "bytetrack"
      max_age_frames: 30
-     selection_strategy: "closest_to_center"  # or largest_bbox | highest_confidence | manual_id_lock
+     selection_strategy: "closest_to_center" # or largest_bbox | highest_confidence | manual_id_lock
    prediction:
-     mode: "reactive_pid"  # reactive_pid | kalman | lstm | transformer
+     mode: "reactive_pid" # reactive_pid | kalman | lstm | transformer
      sequence_length: 15
      horizon_frames: 5
      lstm:
@@ -186,7 +190,7 @@ intellitrack/
        kp: 0.05
        ki: 0.0
        kd: 0.01
-       output_limit: 15  # max degrees change per update
+       output_limit: 15 # max degrees change per update
      deadband_px: 10
    servo:
      pan_min_deg: 0
@@ -213,6 +217,7 @@ intellitrack/
 8. `git init` the repo if not already a repo, and make an initial commit.
 
 **Acceptance Criteria:**
+
 - `pip install -r requirements.txt` completes without errors in a fresh virtualenv.
 - `python -c "from intellitrack.utils.config import load_config; print(load_config('configs/default.yaml'))"` runs and prints the parsed dict.
 - `pytest` runs (even with zero tests collected) without import errors.
@@ -224,6 +229,7 @@ intellitrack/
 **Goal:** Pull frames from a webcam and run object detection on them.
 
 **Tasks:**
+
 1. `capture/camera.py`: implement class `Camera`:
    - `__init__(self, index: int, width: int, height: int)`
    - `start(self) -> None` — opens `cv2.VideoCapture`, runs a background thread that continuously grabs frames into a thread-safe single-slot buffer (always keep only the latest frame, to avoid lag).
@@ -241,6 +247,7 @@ intellitrack/
 4. `tests/test_detection.py`: use a static test image (agent should generate/save one simple synthetic image with a solid rectangle, or use any bundled sample image) and assert `YoloDetector.detect` returns a `list` without raising, and that filtering logic (mock a fake ultralytics result object) correctly drops detections below `confidence_threshold` and outside `target_classes`. Mock the underlying `ultralytics.YOLO` call so the test does not require downloading real weights.
 
 **Acceptance Criteria:**
+
 - `python scripts/run_live.py` opens a webcam window showing live bounding boxes and an FPS counter.
 - `pytest tests/test_detection.py` passes.
 - No hardcoded confidence/IoU/class values inside `yolo_detector.py` — all sourced from constructor args populated from config.
@@ -252,6 +259,7 @@ intellitrack/
 **Goal:** Assign stable IDs across frames and pick one target to follow.
 
 **Tasks:**
+
 1. `tracking/byte_tracker_wrapper.py`:
    - Define `@dataclass TrackedObject`: `track_id: int`, `bbox_xyxy: tuple[float,float,float,float]`, `centroid: tuple[float,float]`, `class_name: str`, `confidence: float`, `age_frames: int`.
    - Class `ByteTrackerWrapper` wrapping Ultralytics' built-in tracking (`model.track(frame, tracker="bytetrack.yaml", persist=True)`) OR a standalone ByteTrack implementation if built-in tracking is insufficient — pick built-in first for MVP speed.
@@ -269,6 +277,7 @@ intellitrack/
    - Losing the locked target for more than `max_lost_frames` triggers reselection on the next call, and staying lost for fewer frames keeps the previous lock (returns `None` for that call rather than switching prematurely).
 
 **Acceptance Criteria:**
+
 - `python scripts/run_live.py` visibly tracks a single moving object with a consistent ID as it moves across frame.
 - `pytest tests/test_tracking.py` passes for all four strategies.
 
@@ -279,6 +288,7 @@ intellitrack/
 **Goal:** Convert a tracked target's position into a control signal, in software only (no hardware yet).
 
 **Tasks:**
+
 1. `prediction/kalman.py`:
    - Class `ConstantVelocityKalman2D` implementing a standard constant-velocity 2D Kalman filter (state `[x, y, vx, vy]`).
    - `predict(self) -> tuple[float, float]` — advances state, returns predicted `(x, y)`.
@@ -301,6 +311,7 @@ intellitrack/
 8. `tests/test_pid.py`: run `PIDController.compute` repeatedly against a fixed nonzero error and assert the cumulative output trends toward reducing error in a simple closed-loop simulation (simulate: `position += pid.compute(target - position, dt)`), and assert output never exceeds `output_limit`.
 
 **Acceptance Criteria:**
+
 - `TrackingPipeline` runs end-to-end for both `reactive_pid` and `kalman` modes with a live camera, logging computed pan/tilt degrees to console every frame (no hardware needed yet).
 - `pytest tests/test_kalman.py tests/test_pid.py` passes.
 
@@ -311,6 +322,7 @@ intellitrack/
 **Goal:** Actually move physical pan-tilt servos, with a safe mock fallback.
 
 **Tasks:**
+
 1. `firmware/pan_tilt_controller/pan_tilt_controller.ino`:
    - Uses the `Servo` library, two servos on configurable pins (document pins in comments, e.g. pan = pin 9, tilt = pin 10).
    - Reads newline-terminated serial commands of the form `PAN:<int> TILT:<int>\n`.
@@ -326,6 +338,7 @@ intellitrack/
 4. `tests/test_serial_bridge.py`: instantiate the bridge pointed at a clearly invalid port (e.g. `"/dev/does-not-exist"`), assert `connect()` falls back to mock mode without raising, and assert `send_angles` logs the expected values (capture via `caplog` or an injectable log sink) rather than throwing.
 
 **Acceptance Criteria:**
+
 - With no Arduino connected, the full pipeline still runs without crashing and clearly logs "hardware not available — running in mock mode."
 - With an Arduino connected and the firmware flashed, moving a physical object in front of the camera visibly pans/tilts the mount to keep it centered.
 - `pytest tests/test_serial_bridge.py` passes.
@@ -337,6 +350,7 @@ intellitrack/
 **Goal:** Predict a target's future position instead of only reacting to its current position, and integrate it as a selectable tracking mode.
 
 **Tasks:**
+
 1. `scripts/record_dataset.py`: CLI script that runs the pipeline (camera + detection + tracking, no control needed) for a configurable duration/frame count and writes one CSV row per frame to `data/datasets/trajectories_<timestamp>.csv` with columns: `timestamp, track_id, centroid_x, centroid_y, frame_width, frame_height`. This is how training data for the predictor gets collected.
 2. `prediction/lstm_predictor.py`:
    - `class TrajectoryDataset(torch.utils.data.Dataset)`: given a CSV (or list of per-track centroid sequences), builds `(sequence_length, horizon_frames)` input/target windows of normalized `(x, y, vx, vy)` features per track.
@@ -348,6 +362,7 @@ intellitrack/
 6. `tests/test_prediction.py` (LSTM portion): construct a tiny synthetic dataset of a simple linear or sinusoidal trajectory, train for a small number of epochs, and assert training loss decreases from epoch 1 to the final epoch. Also assert `LSTMPredictor.predict_next` returns a tuple of two floats and does not raise when no checkpoint exists (fallback path).
 
 **Acceptance Criteria:**
+
 - `python scripts/record_dataset.py --duration 120` produces a usable CSV with a moving object in frame.
 - `python scripts/train_predictor.py --model lstm --dataset <file>` trains and writes a checkpoint to `data/models/lstm_predictor.pt`.
 - Running the live pipeline with `prediction.mode: lstm` uses the trained model's predicted position to drive PID/servo output, and this is visibly logged (predicted vs raw position both printed per frame for verification).
@@ -360,6 +375,7 @@ intellitrack/
 **Goal:** Add the second predictive model so the four-way comparison from the concept doc is complete.
 
 **Tasks:**
+
 1. `prediction/transformer_predictor.py`:
    - `class TransformerTrajectoryPredictor(nn.Module)`: a small Transformer encoder (`nn.TransformerEncoder`) operating on the same `(sequence_length, features)` windows as the LSTM, with a linear head to `(x, y)` at `horizon_frames` ahead. Constructor args from `configs/default.yaml`'s `prediction.transformer` section (`d_model`, `nhead`, `num_layers`).
    - Wrapper class `TransformerPredictor` with the identical `predict_next(history) -> (x, y)` interface as `LSTMPredictor`, same checkpoint-missing fallback behavior.
@@ -368,6 +384,7 @@ intellitrack/
 4. Extend `tests/test_prediction.py` with the Transformer equivalent of the LSTM tests (loss decreases on tiny synthetic data; safe fallback with no checkpoint).
 
 **Acceptance Criteria:**
+
 - All four modes (`reactive_pid`, `kalman`, `lstm`, `transformer`) are selectable purely via `configs/default.yaml`'s `prediction.mode` key (or a `--mode` CLI override) with no code changes required to switch.
 - `pytest tests/test_prediction.py` passes for both model types.
 
@@ -378,6 +395,7 @@ intellitrack/
 **Goal:** A minimal web UI to watch the live tracking feed and adjust settings without restarting the process.
 
 **Tasks:**
+
 1. `api/schemas.py`: pydantic models `ConfigUpdateRequest` (subset of tunable fields: `prediction.mode`, PID gains, `tracking.selection_strategy`) and `MetricsResponse` (current FPS, latency, mode, target_found, pan_deg, tilt_deg).
 2. `api/main.py`: creates the `FastAPI` app, instantiates a single shared `TrackingPipeline` running in a background thread (started on app startup, stopped cleanly on shutdown), includes the three routers below, and mounts `api/static/` for the simple HTML page.
 3. `api/routes_stream.py`: `GET /stream` returns an MJPEG multipart response of the annotated frames (reuse the same drawing logic as `run_live.py`, refactored into a shared `visualize_frame()` utility so it isn't duplicated).
@@ -387,6 +405,7 @@ intellitrack/
 7. `tests/test_api.py`: use FastAPI's `TestClient` to hit `/config` (GET and POST) and `/metrics`, asserting correct status codes and schema-valid JSON responses. Mock/stub the pipeline so tests don't require a real camera.
 
 **Acceptance Criteria:**
+
 - Running `uvicorn intellitrack.api.main:app --reload` and visiting `http://localhost:8000` shows a live annotated video stream and a metrics panel.
 - Changing `prediction.mode` through the web form visibly changes tracking behavior without restarting the server.
 - `pytest tests/test_api.py` passes.
@@ -398,6 +417,7 @@ intellitrack/
 **Goal:** Make every run produce comparable, quantitative data.
 
 **Tasks:**
+
 1. `metrics/logger.py`: `class MetricsLogger` that appends one JSON-lines record per frame to `data/logs/<mode>_<timestamp>.jsonl` with fields: `timestamp, mode, target_found, raw_x, raw_y, predicted_x, predicted_y, pan_deg, tilt_deg, latency_ms, fps_instant`. Buffered writes, flushed periodically or on close.
 2. `metrics/evaluator.py`: `evaluate_run(log_path: str) -> dict` computing, from a `.jsonl` log:
    - `tracking_accuracy` = fraction of frames where `target_found` is true.
@@ -410,6 +430,7 @@ intellitrack/
 4. `scripts/run_experiment.py`: CLI (`--mode`, `--duration-seconds` or `--max-frames`, `--source {live,recorded}`, `--video-path` if recorded) that runs `TrackingPipeline` for a bounded run, writes the `.jsonl` log, then immediately calls `evaluate_run` and writes a summary `data/logs/<mode>_<timestamp>_summary.json`.
 
 **Acceptance Criteria:**
+
 - `python scripts/run_experiment.py --mode kalman --duration-seconds 60` produces both a `.jsonl` per-frame log and a `_summary.json` with all metric fields populated (non-`None` where applicable).
 - Re-running with `--mode lstm` populates `prediction_rmse_px` with a real number.
 
@@ -420,6 +441,7 @@ intellitrack/
 **Goal:** Directly answer the project's research question with a reproducible report.
 
 **Tasks:**
+
 1. Record one or more short reference videos (people/objects moving through frame) and save under `data/recordings/`, so all four modes can be evaluated against identical input (fairness across the comparison) — extend `TrackingPipeline`/`Camera` to optionally read from a video file path instead of a live camera (add a `source: {live, file}` and `file_path` key to `configs/default.yaml`'s `camera` section).
 2. Run `scripts/run_experiment.py` once per mode (`reactive_pid`, `kalman`, `lstm`, `transformer`) against the same recorded video(s), producing four summary JSON files.
 3. `scripts/generate_report.py`: loads all four summary JSON files, and produces `data/logs/comparison_report.md` containing:
@@ -428,6 +450,7 @@ intellitrack/
    - A short "Interpretation" section auto-filled with which mode had the lowest tracking error and lowest target loss rate, generated programmatically from the computed numbers (not hardcoded text).
 
 **Acceptance Criteria:**
+
 - `python scripts/generate_report.py` produces `data/logs/comparison_report.md` with a complete table (no missing/`None` cells for metrics that apply to that mode) and three embedded PNG plots.
 - The report is directly usable as a results section draft for the undergraduate research paper described in the project concept.
 
@@ -436,6 +459,7 @@ intellitrack/
 ## 4. Definition of Done for the MVP
 
 The MVP is complete when all of the following hold simultaneously:
+
 - All nine phases above pass their individual acceptance criteria.
 - `pytest` passes with zero failures across the whole `tests/` directory.
 - The pipeline runs end-to-end with zero hardware attached (full mock mode) and, separately, with an Arduino/ESP32 and pan-tilt mount attached (real servo motion).

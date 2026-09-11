@@ -15,7 +15,7 @@ detection:
 tracking:
   tracker: "bytetrack"
   max_age_frames: 30
-  selection_strategy: "closest_to_center"  # or largest_bbox | highest_confidence | manual_id_lock
+  selection_strategy: "highest_confidence"  #"closest_to_center"  # or largest_bbox | highest_confidence | manual_id_lock
 
 prediction:
   mode: "reactive_pid"  # reactive_pid | kalman | lstm | transformer
