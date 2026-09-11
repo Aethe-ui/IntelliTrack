@@ -41,3 +41,4 @@ notebooks/.ipynb_checkpoints/
 
 # Misc
 *.log
+data/datasets/trajectories_20260911_154120.csv
