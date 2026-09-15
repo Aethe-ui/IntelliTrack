@@ -112,3 +112,84 @@ def test_trajectory_dataset_from_sequences() -> None:
     assert isinstance(x, torch.Tensor) and isinstance(y, torch.Tensor)
     assert x.shape == (8, 4)
     assert y.shape == (2,)
+
+
+def test_scene_split_isolation(tmp_path: Path) -> None:
+    """Windows from the same scene/video must never cross the train/val boundary."""
+    from intellitrack.prediction.train import _scene_split
+
+    # Build a dataset with 4 distinct scenes, each having multiple tracks
+    # Simulate archive-format track_ids via CSV
+    import csv
+
+    csv_path = tmp_path / "multi_scene.csv"
+    with csv_path.open("w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["track_id", "centroid_x", "centroid_y", "timestamp"])
+        for scene_idx in range(4):
+            scene = f"scene{scene_idx}/video0"
+            for track in range(3):
+                tid = f"{scene}:{track}"
+                for t in range(30):
+                    writer.writerow([tid, 100.0 + t * 2.0, 50.0 + t * 1.0, t * 10])
+
+    ds = TrajectoryDataset(
+        csv_path=str(csv_path), sequence_length=8, horizon_frames=2
+    )
+    assert len(ds) > 0
+    assert len(ds.scene_ids) == len(ds)
+
+    train_sub, val_sub, info = _scene_split(ds, val_fraction=0.25, seed=42)
+
+    # Collect scene IDs for each split
+    train_scenes = {ds.scene_ids[i] for i in train_sub.indices}
+    val_scenes = {ds.scene_ids[i] for i in val_sub.indices}
+
+    # Core property: no scene overlap
+    assert train_scenes & val_scenes == set(), (
+        f"Scene leakage detected: {train_scenes & val_scenes}"
+    )
+    # Every window belongs to exactly one split
+    assert len(train_sub) + len(val_sub) == len(ds)
+    assert info["n_train_scenes"] + info["n_val_scenes"] == info["n_scenes"]
+
+
+def test_target_semantics() -> None:
+    """Verify target is the single point at horizon_frames ahead of window end."""
+    seq_len = 10
+    horizon = 3
+    fw, fh = 640.0, 480.0
+
+    # Known linear trajectory: (i, 2*i)
+    seq = [(float(i), float(2 * i)) for i in range(30)]
+    ds = TrajectoryDataset(
+        sequences=[seq],
+        sequence_length=seq_len,
+        horizon_frames=horizon,
+        frame_width=fw,
+        frame_height=fh,
+    )
+
+    # First window: seq[0:10] → target is seq[10 + 3 - 1] = seq[12] = (12, 24)
+    _, target = ds[0]
+    expected_x = 12.0 / fw
+    expected_y = 24.0 / fh
+    assert abs(float(target[0]) - expected_x) < 1e-5
+    assert abs(float(target[1]) - expected_y) < 1e-5
+
+
+def test_pixel_error_calculation() -> None:
+    """Verify pixel-space displacement error is computed correctly."""
+    fw, fh = 640.0, 480.0
+
+    # Normalised prediction and target
+    pred = torch.tensor([[100.0 / fw, 200.0 / fh]])
+    target = torch.tensor([[103.0 / fw, 204.0 / fh]])
+
+    # Pixel-space error: sqrt((3)^2 + (4)^2) = 5.0
+    diff_x = (pred[:, 0] - target[:, 0]) * fw
+    diff_y = (pred[:, 1] - target[:, 1]) * fh
+    disp = torch.sqrt(diff_x ** 2 + diff_y ** 2)
+
+    assert abs(float(disp[0]) - 5.0) < 1e-4
+

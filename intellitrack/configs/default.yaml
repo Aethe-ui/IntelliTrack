@@ -1,24 +1,25 @@
 camera:
   index: 1
-  width: 640
-  height: 480
+  width: 1280
+  height: 720
   fps_target: 30
-  source: "live"       # live | file
-  file_path: null      # path used when source == file
+  source: "live" # live | file
+  file_path: null # path used when source == file
 
 detection:
   model_path: "yolo11n.pt"
-  confidence_threshold: 0.4
-  iou_threshold: 0.45
-  target_classes: ["cell phone"]
+  confidence_threshold: 0.05
+  iou_threshold: 0.5
+  target_classes: ["person"]
+  imgsz: 1280
 
 tracking:
   tracker: "bytetrack"
   max_age_frames: 30
-  selection_strategy: "highest_confidence"  #"closest_to_center"  # or largest_bbox | highest_confidence | manual_id_lock
+  selection_strategy: "highest_confidence" #"closest_to_center"  # or largest_bbox | highest_confidence | manual_id_lock
 
 prediction:
-  mode: "reactive_pid"  # reactive_pid | kalman | lstm | transformer
+  mode: "reactive_pid" # reactive_pid | kalman | lstm | transformer
   sequence_length: 15
   horizon_frames: 5
   lstm:
@@ -36,7 +37,7 @@ control:
     kp: 0.05
     ki: 0.0
     kd: 0.01
-    output_limit: 15  # max degrees change per update
+    output_limit: 15 # max degrees change per update
   deadband_px: 10
 
 servo:

@@ -89,23 +89,52 @@ class TrajectoryDataset(Dataset):
         self.frame_width = frame_width
         self.frame_height = frame_height
 
+        # Per-sequence scene/video identifiers (parallel to sequences list)
+        seq_scene_ids: Optional[List[str]] = None
+
         if csv_path is not None:
-            sequences = self._load_csv(csv_path)
+            sequences, seq_scene_ids = self._load_csv(csv_path)
         if not sequences:
             sequences = []
 
         self._samples: List[Tuple[np.ndarray, np.ndarray]] = []
-        for seq in sequences:
-            self._samples.extend(self._windows_from_sequence(seq))
+        self._window_scene_ids: List[str] = []
+        for i, seq in enumerate(sequences):
+            windows = self._windows_from_sequence(seq)
+            scene_id = seq_scene_ids[i] if seq_scene_ids else str(i)
+            self._samples.extend(windows)
+            self._window_scene_ids.extend([scene_id] * len(windows))
+
+    @property
+    def scene_ids(self) -> List[str]:
+        """Scene/video identifier for each window (parallel to samples)."""
+        return self._window_scene_ids
 
     @staticmethod
-    def _load_csv(path: str) -> List[List[Tuple[float, float]]]:
-        """Load per-track centroid sequences from a trajectories CSV."""
+    def _extract_scene_id(track_id: str) -> str:
+        """Extract scene/video grouping key from a track identifier.
+
+        Archive-format IDs like ``bookstore/video0:0`` yield ``bookstore/video0``.
+        Plain numeric IDs (e.g. from live recording) yield the ID itself.
+        """
+        if ":" in track_id:
+            return track_id.rsplit(":", 1)[0]
+        return track_id
+
+    @staticmethod
+    def _load_csv(path: str) -> tuple:
+        """Load per-track centroid sequences and scene IDs from a trajectories CSV.
+
+        Returns:
+            ``(sequences, scene_ids)`` — parallel lists of centroid sequences
+            and their corresponding scene/video identifiers.
+        """
         import pandas as pd
 
         df = pd.read_csv(path)
         sequences: List[List[Tuple[float, float]]] = []
-        for _, group in df.groupby("track_id"):
+        scene_ids: List[str] = []
+        for track_id, group in df.groupby("track_id"):
             group = group.sort_values("timestamp") if "timestamp" in group.columns else group
             seq = list(
                 zip(
@@ -114,7 +143,8 @@ class TrajectoryDataset(Dataset):
                 )
             )
             sequences.append(seq)
-        return sequences
+            scene_ids.append(TrajectoryDataset._extract_scene_id(str(track_id)))
+        return sequences, scene_ids
 
     def _windows_from_sequence(
         self, seq: List[Tuple[float, float]]

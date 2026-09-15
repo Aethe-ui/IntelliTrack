@@ -32,6 +32,7 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for train/val split")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -91,6 +92,7 @@ def main() -> None:
         lr=args.lr,
         checkpoint_path=str(ckpt_path),
         batch_size=args.batch_size,
+        seed=args.seed,
     )
     logger.info(
         "Training complete. First loss=%.6f last loss=%.6f → %s",
