@@ -1,0 +1,19 @@
+{
+  "settings_version": "0.0.8",
+  "datasets_dir": "E:\\Naitik\\datasets",
+  "weights_dir": "E:\\Naitik\\IntelliTrack\\weights",
+  "runs_dir": "E:\\Naitik\\IntelliTrack\\runs",
+  "uuid": "8c3440b72c8c9002fe4f19b8179ad058f08e2912a0eaafbaf3217dc2dc074e59",
+  "sync": true,
+  "api_key": "",
+  "openai_api_key": "",
+  "clearml": true,
+  "comet": true,
+  "dvc": true,
+  "mlflow": true,
+  "raytune": true,
+  "tensorboard": false,
+  "wandb": false,
+  "vscode_msg": true,
+  "openvino_msg": true
+}

@@ -112,6 +112,46 @@ Set `camera.source: file` and `camera.file_path` in config as an alternative to 
 
 ---
 
+## Predictor training and validation
+
+`scripts/train_predictor.py --model transformer --dataset data/datasets/archive_trajectories.csv --seed 42`
+uses scene/video groups (the prefix before the last `:` in `track_id`) to hold out
+whole scenes. All windows from a scene stay together. At least two groups with
+usable windows are required; datasets without window provenance are rejected.
+Plain IDs remain separate track groups, with a warning: they do not establish
+scene isolation. Do not concatenate recordings with reused track IDs.
+
+Both models retain 15 observations with `[x, y, vx, vy]` features and one target
+at the fifth future observation. Positions and velocities use the configured
+camera width/height for normalization. Training optimizes MSE; `val_fde_px` is
+the mean Euclidean pixel error for that one point. Epoch losses are weighted by
+sample count, and the checkpoint with lowest validation MSE is saved as a plain
+state dictionary. Seed 42 controls scene selection, CLI initialization, and
+training randomness; exact results across devices are not guaranteed.
+
+CSV `frame_width`/`frame_height` columns, when present, must match configuration.
+Otherwise training logs assumed dimensions and full raw coordinate ranges;
+out-of-bounds values trigger a warning without clipping or automatic resizing.
+Ranges alone cannot establish source resolution or detect a smaller-scale CSV.
+
+The two local archive CSVs contain identical IDs, timestamps, and labels across
+842,074 rows, but different coordinates: `archive_trajectories.csv` has x twice
+and y 1.5 times those in `trajectories_archive.csv`. Their ranges respectively are
+x=2.1875..1235.3125, y=1.0547..704.3555 and x=1.09375..617.65625,
+y=0.7031..469.5703. This is consistent with 1280×720 versus 640×480 export scales;
+neither file records authoritative dimensions. The original command selects
+`archive_trajectories.csv`, checked with the configured 1280×720 assumption.
+
+The archive timestamps advance by **10 source frames per observation**. Thus the
+preserved five-observation horizon spans 50 source frames in these CSVs, rather
+than five original camera frames. Match sampling cadence when assessing runtime
+quality; this fix does not change dataset sampling or target indexing.
+
+Local verification artifacts (logs, isolated smoke checkpoints, split IDs and
+metrics) are under `data/logs/training_verification/`. The full-archive one-epoch
+Transformer smoke run used 48 training scenes / 12 validation scenes and
+497,869 / 149,485 windows with seed 42. It verifies the pipeline, not convergence.
+
 ## Tests
 
 ```bash
