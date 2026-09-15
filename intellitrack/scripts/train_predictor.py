@@ -13,6 +13,8 @@ import logging
 import sys
 from pathlib import Path
 
+import torch
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from intellitrack.prediction.lstm_predictor import LSTMTrajectoryPredictor, TrajectoryDataset
@@ -34,6 +36,7 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--seed", type=int, default=42, help="Random seed for train/val split")
     args = parser.parse_args()
+    torch.manual_seed(args.seed)
 
     logging.basicConfig(
         level=logging.INFO,
@@ -56,7 +59,7 @@ def main() -> None:
     logger.info("Dataset size: %d windows", len(dataset))
     if len(dataset) == 0:
         logger.error(
-            "No training windows found — need sequences longer than "
+            "No training windows found — need sequences at least as long as "
             "sequence_length + horizon_frames (%d).",
             seq_len + horizon,
         )

@@ -88,6 +88,10 @@ class TrajectoryDataset(Dataset):
         self.horizon_frames = horizon_frames
         self.frame_width = frame_width
         self.frame_height = frame_height
+        if sequence_length < 1 or horizon_frames < 1:
+            raise ValueError("sequence_length and horizon_frames must be positive.")
+        if not np.isfinite([frame_width, frame_height]).all() or min(frame_width, frame_height) <= 0:
+            raise ValueError("Frame dimensions must be finite and positive.")
 
         # Per-sequence scene/video identifiers (parallel to sequences list)
         seq_scene_ids: Optional[List[str]] = None
@@ -96,6 +100,21 @@ class TrajectoryDataset(Dataset):
             sequences, seq_scene_ids = self._load_csv(csv_path)
         if not sequences:
             sequences = []
+
+        # Include all observations, even tracks too short to produce windows.
+        self.coordinate_ranges = None
+        for seq in sequences:
+            if not seq:
+                continue
+            arr = np.asarray(seq, dtype=float)
+            if not np.isfinite(arr).all():
+                raise ValueError("Trajectory coordinates must be finite.")
+            bounds = (arr[:, 0].min(), arr[:, 0].max(), arr[:, 1].min(), arr[:, 1].max())
+            if self.coordinate_ranges is None:
+                self.coordinate_ranges = bounds
+            else:
+                a, b, c, d = self.coordinate_ranges
+                self.coordinate_ranges = (min(a, bounds[0]), max(b, bounds[1]), min(c, bounds[2]), max(d, bounds[3]))
 
         self._samples: List[Tuple[np.ndarray, np.ndarray]] = []
         self._window_scene_ids: List[str] = []
@@ -118,11 +137,13 @@ class TrajectoryDataset(Dataset):
         Plain numeric IDs (e.g. from live recording) yield the ID itself.
         """
         if ":" in track_id:
-            return track_id.rsplit(":", 1)[0]
+            scene, track = track_id.rsplit(":", 1)
+            if scene.strip() and track.strip():
+                return scene
+            logger.warning("Malformed track ID %r; preserving the complete ID as its grouping key.", track_id)
         return track_id
 
-    @staticmethod
-    def _load_csv(path: str) -> tuple:
+    def _load_csv(self, path: str) -> tuple:
         """Load per-track centroid sequences and scene IDs from a trajectories CSV.
 
         Returns:
@@ -131,7 +152,19 @@ class TrajectoryDataset(Dataset):
         """
         import pandas as pd
 
-        df = pd.read_csv(path)
+        df = pd.read_csv(path, dtype={"track_id": str}, keep_default_na=False)
+        if df["track_id"].str.strip().eq("").any():
+            logger.warning("CSV contains blank track IDs; trajectory provenance is unknown.")
+            raise ValueError("CSV track IDs must not be blank.")
+        for column, configured in (("frame_width", self.frame_width), ("frame_height", self.frame_height)):
+            if column in df:
+                values = pd.to_numeric(df[column], errors="coerce")
+                if not values.eq(configured).all():
+                    raise ValueError(f"CSV {column} metadata does not match configured {configured}; use matching dimensions.")
+        if not {"frame_width", "frame_height"}.issubset(df.columns):
+            logger.warning("CSV has no complete source-resolution metadata; coordinate ranges cannot prove its original resolution.")
+        if (~df["track_id"].str.contains(":", regex=False)).any():
+            logger.warning("CSV IDs without scene prefixes use each complete track ID as a group. Scene isolation cannot be established for these IDs; do not combine recordings with reused IDs.")
         sequences: List[List[Tuple[float, float]]] = []
         scene_ids: List[str] = []
         for track_id, group in df.groupby("track_id"):
