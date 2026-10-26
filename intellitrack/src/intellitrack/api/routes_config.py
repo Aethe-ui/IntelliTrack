@@ -54,5 +54,8 @@ def post_config(body: ConfigUpdateRequest, request: Request) -> Dict[str, Any]:
     if body.selection_strategy is not None:
         pipeline.set_selection_strategy(body.selection_strategy)
 
+    if body.target_class is not None:
+        pipeline.set_target_class(body.target_class)
+
     logger.info("Config updated via API: %s", body.model_dump(by_alias=True, exclude_none=True))
     return {"ok": True, "config": cfg}

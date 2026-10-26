@@ -23,6 +23,7 @@ class StubPipeline:
             "prediction": {"mode": "reactive_pid"},
             "control": {"pid": {"kp": 0.05, "ki": 0.0, "kd": 0.01, "output_limit": 15}},
             "tracking": {"selection_strategy": "closest_to_center"},
+            "detection": {"target_classes": ["person"]},
         }
         self._last = FrameMetrics(
             timestamp=0.0,
@@ -66,6 +67,23 @@ class StubPipeline:
     def set_selection_strategy(self, strategy: str) -> None:
         self._config["tracking"]["selection_strategy"] = strategy
 
+    def set_target_class(self, target_class: str) -> None:
+        self._config["detection"]["target_classes"] = (
+            [] if target_class.strip().lower() in {"", "all"} else [target_class.strip().lower()]
+        )
+
+    @property
+    def live_statistics(self) -> dict:
+        return {
+            "frames": 0,
+            "tracking_accuracy": 0.0,
+            "loss_events": 0,
+            "mean_latency_ms": 0.0,
+            "p95_latency_ms": 0.0,
+            "mean_fps": 0.0,
+            "stability_px": 0.0,
+        }
+
 
 @pytest.fixture()
 def client() -> TestClient:
@@ -93,6 +111,12 @@ def test_post_config_changes_mode(client: TestClient) -> None:
     assert body["ok"] is True
     assert body["config"]["prediction"]["mode"] == "kalman"
     assert body["config"]["control"]["pid"]["kp"] == 0.1
+
+
+def test_post_config_changes_target_class(client: TestClient) -> None:
+    res = client.post("/config", json={"detection.target_class": "car"})
+    assert res.status_code == 200
+    assert res.json()["config"]["detection"]["target_classes"] == ["car"]
 
 
 def test_get_metrics_schema(client: TestClient) -> None:

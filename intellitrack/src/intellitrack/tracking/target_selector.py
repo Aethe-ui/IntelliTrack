@@ -72,6 +72,11 @@ class TargetSelector:
         self._lost_frames = 0
         logger.info("TargetSelector: locked onto track_id=%d", track_id)
 
+    def reset(self) -> None:
+        """Clear the active lock and lost-target state."""
+        self._locked_id = _NO_LOCK
+        self._lost_frames = 0
+
     def select(self, tracks: List[TrackedObject]) -> Optional[TrackedObject]:
         """Pick the active target from the current list of tracked objects.
 

@@ -72,6 +72,12 @@ class ByteTrackerWrapper:
         self._age: dict = {}
         logger.info("ByteTrackerWrapper initialised with model '%s'", model_path)
 
+    def set_target_classes(self, target_classes: List[str]) -> None:
+        """Update the class allow-list used by subsequent tracks."""
+        self._target_classes = [c.lower().strip() for c in target_classes if c.strip()]
+        self._age.clear()
+        logger.info("Tracking target classes updated: %s", self._target_classes or "all")
+
     def update(
         self, frame: np.ndarray, detections: List[Detection]
     ) -> List[TrackedObject]:

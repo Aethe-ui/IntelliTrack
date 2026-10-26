@@ -22,6 +22,7 @@ def get_metrics(request: Request) -> MetricsResponse:
             target_found=False,
             pan_deg=90.0,
             tilt_deg=90.0,
+            live_stats=pipeline.live_statistics,
         )
     return MetricsResponse(
         fps=m.fps_instant,
@@ -30,4 +31,5 @@ def get_metrics(request: Request) -> MetricsResponse:
         target_found=m.target_found,
         pan_deg=m.pan_deg,
         tilt_deg=m.tilt_deg,
+        live_stats=pipeline.live_statistics,
     )

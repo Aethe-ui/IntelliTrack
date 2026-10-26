@@ -10,7 +10,7 @@ detection:
   model_path: "yolo11n.pt"
   confidence_threshold: 0.05
   iou_threshold: 0.5
-  target_classes: ["person"]
+  target_classes: ["cell phone"]
   imgsz: 1280
 
 tracking:

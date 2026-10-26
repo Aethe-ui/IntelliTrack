@@ -51,7 +51,8 @@ def visualize_frame(
         x1, y1, x2, y2 = [int(v) for v in t.bbox_xyxy]
         color = _COLOR_TARGET if t.track_id == target_id else _COLOR_TRACKED
         cv2.rectangle(out, (x1, y1), (x2, y2), color, 2)
-        label = f"ID:{t.track_id} {t.class_name} {t.confidence:.2f}"
+        class_label = t.class_name.replace("_", " ").title()
+        label = f"{class_label} | ID {t.track_id} | {t.confidence:.2f}"
         (tw, th), _ = cv2.getTextSize(label, _FONT, 0.5, 1)
         cv2.rectangle(out, (x1, y1 - th - 4), (x1 + tw + 2, y1), color, -1)
         cv2.putText(out, label, (x1 + 1, y1 - 2), _FONT, 0.5, (255, 255, 255), 1)

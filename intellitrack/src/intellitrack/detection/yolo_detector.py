@@ -75,6 +75,11 @@ class YoloDetector:
             self._target_classes,
         )
 
+    def set_target_classes(self, target_classes: List[str]) -> None:
+        """Update the class allow-list used by subsequent detections."""
+        self._target_classes = [c.lower().strip() for c in target_classes if c.strip()]
+        logger.info("Detection target classes updated: %s", self._target_classes or "all")
+
     def detect(self, frame: np.ndarray) -> List[Detection]:
         """Run inference on a single BGR frame and return filtered detections.
 

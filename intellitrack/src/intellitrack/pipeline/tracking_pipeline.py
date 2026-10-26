@@ -206,6 +206,13 @@ class TrackingPipeline:
         self._last_tracks: List[TrackedObject] = []
         self._last_target: Optional[TrackedObject] = None
         self._eof = False
+        self._live_frame_count = 0
+        self._live_found_count = 0
+        self._live_loss_events = 0
+        self._live_previous_found = False
+        self._live_latencies: List[float] = []
+        self._live_fps: List[float] = []
+        self._live_center_errors: List[float] = []
 
         logger.info("TrackingPipeline initialised in mode '%s'.", self._mode.value)
 
@@ -395,6 +402,16 @@ class TrackingPipeline:
         )
         self._config.setdefault("tracking", {})["selection_strategy"] = strategy
 
+    def set_target_class(self, target_class: str) -> None:
+        """Hot-swap the object class filter used by detection and tracking."""
+        normalized = target_class.strip().lower()
+        target_classes = [] if normalized in {"", "all"} else [normalized]
+        self._detector.set_target_classes(target_classes)
+        self._tracker.set_target_classes(target_classes)
+        self._selector.reset()
+        self._config.setdefault("detection", {})["target_classes"] = target_classes
+        logger.info("Target class changed to: %s", target_classes or "all")
+
     @property
     def mode(self) -> TrackingMode:
         """Currently active tracking mode."""
@@ -404,6 +421,32 @@ class TrackingPipeline:
     def last_metrics(self) -> Optional[FrameMetrics]:
         """Most recent :class:`FrameMetrics` (for the API metrics endpoint)."""
         return self._last_metrics
+
+    @property
+    def live_statistics(self) -> dict:
+        """Return aggregate statistics for the current process run."""
+        frame_count = self._live_frame_count
+        return {
+            "frames": frame_count,
+            "tracking_accuracy": (
+                self._live_found_count / frame_count * 100.0 if frame_count else 0.0
+            ),
+            "loss_events": self._live_loss_events,
+            "mean_latency_ms": (
+                float(np.mean(self._live_latencies)) if self._live_latencies else 0.0
+            ),
+            "p95_latency_ms": (
+                float(np.percentile(self._live_latencies, 95))
+                if self._live_latencies
+                else 0.0
+            ),
+            "mean_fps": float(np.mean(self._live_fps)) if self._live_fps else 0.0,
+            "stability_px": (
+                float(np.std(self._live_center_errors))
+                if len(self._live_center_errors) > 1
+                else 0.0
+            ),
+        }
 
     @property
     def last_annotated_frame(self) -> Optional[np.ndarray]:
@@ -545,6 +588,25 @@ class TrackingPipeline:
     ) -> None:
         """Cache last frame state and optionally append a metrics log record."""
         self._last_metrics = metrics
+        self._live_frame_count += 1
+        if metrics.target_found:
+            self._live_found_count += 1
+        if self._live_previous_found and not metrics.target_found:
+            self._live_loss_events += 1
+        self._live_previous_found = metrics.target_found
+        self._live_latencies.append(metrics.latency_ms)
+        self._live_fps.append(metrics.fps_instant)
+        if metrics.raw_centroid is not None:
+            self._live_center_errors.append(
+                float(np.hypot(
+                    metrics.raw_centroid[0] - self._frame_center[0],
+                    metrics.raw_centroid[1] - self._frame_center[1],
+                ))
+            )
+        max_live_samples = 1000
+        self._live_latencies = self._live_latencies[-max_live_samples:]
+        self._live_fps = self._live_fps[-max_live_samples:]
+        self._live_center_errors = self._live_center_errors[-max_live_samples:]
         if frame is not None:
             self._last_frame = frame
         self._last_tracks = tracks
