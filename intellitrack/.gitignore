@@ -19,6 +19,7 @@ data/logs/
 data/models/*.pt
 *.pt
 yolo11n.pt
+data/datasets/
 
 # IDE
 .vscode/
